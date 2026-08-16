@@ -262,6 +262,35 @@ FolderSyncではSFTP、server `100.111.60.44`、port `2222`、user `icloud`、pr
 
 この暫定版はrandom-write互換性のため、closeされるまでのアップロード平文を`/cache`のサイズ制限付きtmpfsへ保持します。既定上限は`SFTP_CACHE_SIZE=1G`です。最大同時アップロードより大きく設定し、ホストのswapは無効化または暗号化してください。chmod/chown、symlink、mtime保存は対象外です。恒久版ではGateway native SFTP実装へ置き換える予定です。
 
+### 仮FTPS互換レイヤー
+
+`ftps` Compose profileは、Implicit FTPSを内部WebDAVへ変換します。接続直後からTLSとなる外部ポート`990`と、パッシブデータポート`30000-30009`だけをTailscale Serveで転送します。平文FTP、Active mode、インターネットへの直接公開には対応しません。ファイル操作はGatewayの暗号化CAS、lock、version、retentionをそのまま利用します。
+
+既存サーバーでは、FTPS専用パスワードとTailscale転送を設定します。WebDAVパスワードを再利用しません。
+
+```bash
+sh scripts/setup-ftps.sh --public-ip 100.111.60.44
+
+docker compose restart tailscale
+docker compose --profile ftps up -d ftps
+docker compose logs --tail=100 ftps tailscale
+```
+
+クライアント設定:
+
+- protocol: FTPS / FTP over TLS
+- TLS mode: Implicit
+- server: `icloud-dav.tailb40035.ts.net`
+- port: `990`
+- passive mode: enabled
+- username: `icloud`
+- password: `setup-ftps.sh`が生成したFTPS専用パスワード
+- server CA: `pki/client/server-ca.pem`
+
+クライアント証明書`client.pfx`はFTPSでは使用しません。サーバー証明書の検証を無効化せず、Androidには`server-ca.pem`をCA証明書として登録してください。MagicDNS名は証明書SANと一致します。IPアドレスを接続先にすると証明書名検証に失敗するため、FTPSの制御接続にはMagicDNS名を使用します。
+
+FTPは制御接続とは別にデータ接続を作るため、tailnet ACLでも`990`と`30000-30009`を同じ利用者・端末にだけ許可してください。SFTPを利用できるクライアントでは、単一ポートと公開鍵認証を使えるSFTPを優先します。
+
 ## WebDAV操作
 
 - `PROPFIND`: 仮想directory・metadata・ETag

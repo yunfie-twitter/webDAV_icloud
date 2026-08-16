@@ -71,6 +71,33 @@ services:
       - no-new-privileges:true
     depends_on: [gateway, tailscale]
 
+  # Temporary implicit FTPS compatibility layer. The control connection is
+  # TLS from the first byte on external port 990; passive data connections use
+  # 30000-30009. It proxies all file operations through the encrypted gateway.
+  ftps:
+    image: rclone/rclone:1.74.2
+    profiles: [ftps]
+    restart: unless-stopped
+    network_mode: service:tailscale
+    entrypoint: ["/bin/sh", "/opt/icloud-ftps/start-ftps.sh"]
+    environment:
+      ICLOUD_WEBDAV_PASSWORD: ${ICLOUD_WEBDAV_PASSWORD:?set ICLOUD_WEBDAV_PASSWORD}
+      ICLOUD_FTPS_PASSWORD: ${ICLOUD_FTPS_PASSWORD:-}
+      FTPS_PUBLIC_IP: ${TS_IP_ADDRESS:-}
+      FTPS_CACHE_SIZE: ${FTPS_CACHE_SIZE:-1G}
+    volumes:
+      - ./scripts/start-ftps.sh:/opt/icloud-ftps/start-ftps.sh:ro
+      - ${MTLS_PKI_DIR:-./pki}/runtime:/etc/icloud-ftps/pki:ro
+    tmpfs:
+      - /runtime:rw,nosuid,nodev,noexec,size=16m,mode=0700
+      - /cache:rw,nosuid,nodev,noexec,size=${FTPS_CACHE_SIZE:-1G},mode=0700
+    read_only: true
+    cap_drop:
+      - ALL
+    security_opt:
+      - no-new-privileges:true
+    depends_on: [gateway, tailscale]
+
   tailscale:
     image: tailscale/tailscale:latest
     hostname: ${TS_HOSTNAME:?run ./setup.sh to choose a privacy-safe hostname}

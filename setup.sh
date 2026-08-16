@@ -120,6 +120,7 @@ IFS= read -r selected_socket
 keybroker_socket=${selected_socket:-$keybroker_socket}
 
 webdav_password=$(openssl rand -hex 32)
+ftps_password=$(openssl rand -hex 32)
 postgres_password=$(openssl rand -hex 32)
 
 mkdir -p tailscale-config caddy-ip-sites sftp
@@ -131,6 +132,39 @@ printf '%s\n' \
   '    },' \
   '    "2222": {' \
   '      "TCPForward": "127.0.0.1:2022"' \
+  '    },' \
+  '    "990": {' \
+  '      "TCPForward": "127.0.0.1:2990"' \
+  '    },' \
+  '    "30000": {' \
+  '      "TCPForward": "127.0.0.1:30000"' \
+  '    },' \
+  '    "30001": {' \
+  '      "TCPForward": "127.0.0.1:30001"' \
+  '    },' \
+  '    "30002": {' \
+  '      "TCPForward": "127.0.0.1:30002"' \
+  '    },' \
+  '    "30003": {' \
+  '      "TCPForward": "127.0.0.1:30003"' \
+  '    },' \
+  '    "30004": {' \
+  '      "TCPForward": "127.0.0.1:30004"' \
+  '    },' \
+  '    "30005": {' \
+  '      "TCPForward": "127.0.0.1:30005"' \
+  '    },' \
+  '    "30006": {' \
+  '      "TCPForward": "127.0.0.1:30006"' \
+  '    },' \
+  '    "30007": {' \
+  '      "TCPForward": "127.0.0.1:30007"' \
+  '    },' \
+  '    "30008": {' \
+  '      "TCPForward": "127.0.0.1:30008"' \
+  '    },' \
+  '    "30009": {' \
+  '      "TCPForward": "127.0.0.1:30009"' \
   '    }' \
   '  }' \
   '}' > tailscale-config/serve.json
@@ -176,6 +210,8 @@ trap 'restore_tty; rm -f "$environment_file"' EXIT HUP INT TERM
   printf 'CADDY_IP_SITES_DIR=%s\n' "$(env_quote './caddy-ip-sites')"
   printf 'SFTP_CONFIG_DIR=%s\n' "$(env_quote './sftp')"
   printf 'SFTP_CACHE_SIZE=%s\n' "$(env_quote '1G')"
+  printf 'ICLOUD_FTPS_PASSWORD=%s\n' "$(env_quote "$ftps_password")"
+  printf 'FTPS_CACHE_SIZE=%s\n' "$(env_quote '1G')"
   printf 'KEYBROKER_SOCKET=%s\n' "$(env_quote "$keybroker_socket")"
   printf 'KEYBROKER_GID=10001\n'
 } > "$environment_file"
@@ -185,6 +221,8 @@ trap restore_tty EXIT HUP INT TERM
 
 echo "WebDAV username: icloud"
 echo "WebDAV password: generated and stored as ICLOUD_WEBDAV_PASSWORD in chmod 600 .env"
+echo "FTPS username: icloud"
+echo "FTPS password: generated separately and stored as ICLOUD_FTPS_PASSWORD in chmod 600 .env"
 
 docker compose config --quiet
 docker compose build gateway
