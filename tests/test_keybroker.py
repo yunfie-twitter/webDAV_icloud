@@ -9,7 +9,11 @@ from icloud_ftp.encryption_backend import (
     create_recovery_public_bundle,
     load_recovery_public_bundle,
 )
-from icloud_ftp.keybroker import KeyBrokerPolicy, SoftwareProvider
+from icloud_ftp.keybroker import (
+    KeyBrokerPolicy,
+    LinuxTpmRsaProvider,
+    SoftwareProvider,
+)
 
 
 def test_primary_broker_and_offline_recovery_can_unwrap_same_data(tmp_path):
@@ -122,6 +126,32 @@ def test_key_broker_policy_rejects_concurrency_and_rate_excess():
     assert policy.admit_request()
     policy.release_request()
     assert not policy.admit_request()
+
+
+def test_linux_tpm_provider_uses_key_bound_oaep_scheme(tmp_path, monkeypatch):
+    public_key = tmp_path / "primary-kek.pem"
+    public_key.write_bytes(b"PUBLIC KEY\n")
+    calls = []
+
+    def fake_run(command, **kwargs):
+        calls.append(command)
+        if command[0] == "tpm2_readpublic":
+            output = command[command.index("-o") + 1]
+            with open(output, "wb") as stream:
+                stream.write(public_key.read_bytes())
+            return type("Result", (), {"stdout": b""})()
+        if command[0] == "tpm2_rsaencrypt":
+            return type("Result", (), {"stdout": b"wrapped"})()
+        return type("Result", (), {"stdout": b"d" * 32})()
+
+    monkeypatch.setattr("icloud_ftp.keybroker.subprocess.run", fake_run)
+    provider = LinuxTpmRsaProvider("0x81000003", public_key)
+    envelope = provider.wrap(b"d" * 32, b"context")
+    assert provider.unwrap(envelope, b"context") == b"d" * 32
+
+    crypto_calls = [call for call in calls if call[0] != "tpm2_readpublic"]
+    assert all(call[call.index("-s") + 1] == "null" for call in crypto_calls)
+    assert all("-g" not in call for call in crypto_calls)
 
 
 def test_resumed_rewrap_rejects_a_corrupt_existing_new_envelope(tmp_path):

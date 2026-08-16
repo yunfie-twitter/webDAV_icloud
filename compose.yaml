@@ -38,8 +38,11 @@ services:
     volumes:
       - ./Caddyfile:/etc/caddy/Caddyfile:ro
       - ${MTLS_PKI_DIR:-./pki}/runtime:/etc/caddy/pki:ro
+      - tailscale-socket:/var/run/tailscale
       - caddy-data:/data
       - caddy-config:/config
+    environment:
+      TS_CERT_DOMAIN: ${TS_CERT_DOMAIN:?set the full MagicDNS name ending in .ts.net}
     depends_on: [gateway, tailscale]
 
   tailscale:
@@ -49,12 +52,16 @@ services:
     environment:
       TS_AUTHKEY: ${TS_AUTHKEY:?run ./setup.sh to set an OAuth client secret}
       TS_AUTH_ONCE: "true"
+      TS_HOSTNAME: ${TS_HOSTNAME:?run ./setup.sh to choose a privacy-safe hostname}
+      TS_PERMIT_CERT_UID: "0"
+      TS_SOCKET: /var/run/tailscale/tailscaled.sock
       TS_EXTRA_ARGS: ${TS_EXTRA_ARGS:?run ./setup.sh to set an approved tag}
       TS_SERVE_CONFIG: /config/serve.json
       TS_STATE_DIR: /var/lib/tailscale
       TS_USERSPACE: "false"
     volumes:
       - tailscale-state:/var/lib/tailscale
+      - tailscale-socket:/var/run/tailscale
       - ${TS_SERVE_CONFIG_DIR:-./tailscale-config}:/config:ro
     devices:
       - /dev/net/tun:/dev/net/tun
@@ -121,3 +128,4 @@ volumes:
   caddy-data:
   caddy-config:
   tailscale-state:
+  tailscale-socket:

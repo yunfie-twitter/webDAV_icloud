@@ -172,15 +172,15 @@ class LinuxTpmRsaProvider(KeyProvider):
         self.rsaencrypt = rsaencrypt
         self.rsadecrypt = rsadecrypt
         expected = expected_public_key.resolve().read_bytes()
-        with tempfile.NamedTemporaryFile(suffix=".pem") as actual:
+        with tempfile.TemporaryDirectory() as temporary_directory:
+            actual = Path(temporary_directory) / "observed-public.pem"
             subprocess.run(
-                [readpublic, "-c", key_context, "-f", "pem", "-o", actual.name],
+                [readpublic, "-c", key_context, "-f", "pem", "-o", str(actual)],
                 check=True,
                 capture_output=True,
                 timeout=30,
             )
-            actual.seek(0)
-            observed = actual.read()
+            observed = actual.read_bytes()
         if observed.strip() != expected.strip():
             raise RuntimeError("TPM key context does not match expected public key")
         self.key_id = "tpm-rsa-" + hashlib.sha256(expected).hexdigest()[:24]
@@ -196,9 +196,7 @@ class LinuxTpmRsaProvider(KeyProvider):
                 "-c",
                 self.key_context,
                 "-s",
-                "oaep",
-                "-g",
-                "sha256",
+                "null",
                 "-l",
                 self._label(context),
             ],
@@ -227,9 +225,7 @@ class LinuxTpmRsaProvider(KeyProvider):
                 "-c",
                 self.key_context,
                 "-s",
-                "oaep",
-                "-g",
-                "sha256",
+                "null",
                 "-l",
                 self._label(context),
             ],

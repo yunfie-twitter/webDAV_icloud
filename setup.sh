@@ -99,8 +99,15 @@ case "$ts_hostname" in
     exit 2
     ;;
 esac
-printf 'Optional full MagicDNS name for certificate SAN (blank to omit): '
+printf 'Full MagicDNS name for automatic Tailscale certificate: '
 IFS= read -r ts_fqdn
+case "$ts_fqdn" in
+  "$ts_hostname".*.ts.net) ;;
+  *)
+    echo "Enter the full name, for example: $ts_hostname.tail12345.ts.net" >&2
+    exit 2
+    ;;
+esac
 
 printf 'iCloud authentication method [sms/device]: '
 IFS= read -r auth_method
@@ -158,6 +165,7 @@ trap 'restore_tty; rm -f "$environment_file"' EXIT HUP INT TERM
   printf 'ICLOUD_AUTH_METHOD=%s\n' "$(env_quote "$auth_method")"
   printf 'TS_AUTHKEY=%s\n' "$(env_quote "$tailscale_secret")"
   printf 'TS_HOSTNAME=%s\n' "$(env_quote "$ts_hostname")"
+  printf 'TS_CERT_DOMAIN=%s\n' "$(env_quote "$ts_fqdn")"
   printf 'TS_EXTRA_ARGS=%s\n' "$(env_quote "$ts_extra_args")"
   printf 'TS_SERVE_CONFIG_DIR=%s\n' "$(env_quote './tailscale-config')"
   printf 'MTLS_PKI_DIR=%s\n' "$(env_quote './pki')"

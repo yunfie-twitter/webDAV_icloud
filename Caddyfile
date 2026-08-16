@@ -1,5 +1,6 @@
-https://:443 {
-    tls /etc/caddy/pki/server.pem /etc/caddy/pki/server-key.pem {
+{$TS_CERT_DOMAIN} {
+    bind 127.0.0.1
+    tls {
         protocols tls1.3
         client_auth {
             mode require_and_verify
