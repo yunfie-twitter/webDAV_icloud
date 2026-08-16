@@ -37,12 +37,14 @@ services:
     network_mode: service:tailscale
     volumes:
       - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - ${CADDY_IP_SITES_DIR:-./caddy-ip-sites}:/etc/caddy/ip-sites:ro
       - ${MTLS_PKI_DIR:-./pki}/runtime:/etc/caddy/pki:ro
       - tailscale-socket:/var/run/tailscale
       - caddy-data:/data
       - caddy-config:/config
     environment:
       TS_CERT_DOMAIN: ${TS_CERT_DOMAIN:?set the full MagicDNS name ending in .ts.net}
+      TLS_DEFAULT_SNI: ${TS_IP_ADDRESS:-${TS_CERT_DOMAIN:?set the full MagicDNS name ending in .ts.net}}
     depends_on: [gateway, tailscale]
 
   tailscale:

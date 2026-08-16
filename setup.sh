@@ -122,7 +122,7 @@ keybroker_socket=${selected_socket:-$keybroker_socket}
 webdav_password=$(openssl rand -hex 32)
 postgres_password=$(openssl rand -hex 32)
 
-mkdir -p tailscale-config
+mkdir -p tailscale-config caddy-ip-sites
 printf '%s\n' \
   '{' \
   '  "TCP": {' \
@@ -166,15 +166,20 @@ trap 'restore_tty; rm -f "$environment_file"' EXIT HUP INT TERM
   printf 'TS_AUTHKEY=%s\n' "$(env_quote "$tailscale_secret")"
   printf 'TS_HOSTNAME=%s\n' "$(env_quote "$ts_hostname")"
   printf 'TS_CERT_DOMAIN=%s\n' "$(env_quote "$ts_fqdn")"
+  printf 'TS_IP_ADDRESS=\n'
   printf 'TS_EXTRA_ARGS=%s\n' "$(env_quote "$ts_extra_args")"
   printf 'TS_SERVE_CONFIG_DIR=%s\n' "$(env_quote './tailscale-config')"
   printf 'MTLS_PKI_DIR=%s\n' "$(env_quote './pki')"
+  printf 'CADDY_IP_SITES_DIR=%s\n' "$(env_quote './caddy-ip-sites')"
   printf 'KEYBROKER_SOCKET=%s\n' "$(env_quote "$keybroker_socket")"
   printf 'KEYBROKER_GID=10001\n'
 } > "$environment_file"
 mv "$environment_file" .env
 chmod 600 .env
 trap restore_tty EXIT HUP INT TERM
+
+echo "WebDAV username: icloud"
+echo "WebDAV password: generated and stored as ICLOUD_WEBDAV_PASSWORD in chmod 600 .env"
 
 docker compose config --quiet
 docker compose build gateway

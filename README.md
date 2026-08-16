@@ -132,7 +132,7 @@ setupは次を対話実行します。
 - ML-KEM Recovery Secretの一度だけの表示
 - `.env`をmode 600で保存し、希望時だけstack起動
 
-hostnameはtailnet管理者から見えます。さらに将来Tailscale Serveで公開CA証明書を取得する構成へ変えると、完全なDNS名がcertificate-transparency logへ現れ得るため、氏名、住所、組織内機密名を使わないでください。現在の既定はTailscaleでTLS終端せず、private mTLS証明書をraw転送します。
+hostnameはtailnet管理者から見えます。Tailscaleの公開CA証明書を取得する完全なDNS名はcertificate-transparency logへ現れ得るため、氏名、住所、組織内機密名を使わないでください。TailscaleはTCP 443をraw転送し、Caddyが公開サーバー証明書とprivate client CAによるmTLSを終端します。
 
 `scripts/setup-mtls.sh`だけを単独で使うこともできます。
 
@@ -181,7 +181,35 @@ docker compose config
 docker compose up -d --build
 ```
 
-WebDAVクライアントへ`pki/client/server-ca.pem`、`client.pem`、`client-key.pem`を設定してください。Basic認証はTailscale + mTLSの内側でのみ使います。
+CaddyはTailscaleの公開HTTPS証明書を自動取得・更新します。MagicDNS名で接続するWebDAVクライアントへ設定する私設PKIは`pki/client/client.pem`と`client-key.pem`だけです。Basic認証はTailscale + mTLSの内側でのみ使います。
+
+### Tailscale IPv4で直接接続する
+
+公開CAはTailscaleの`100.64.0.0/10`アドレスに証明書を発行しないため、IPアクセスには既存のprivate Server CAでIP SAN付き証明書を追加発行します。MagicDNS経路は公開証明書のまま併存し、mTLS要件も変わりません。
+
+追加発行時だけ`pki/offline/server-ca-key.pem`をオフライン保管先から戻して実行します。
+
+```bash
+sh scripts/enable-ip-access.sh --ip 100.111.60.44
+```
+
+`.env`の空の設定を次の値へ変更します。
+
+```dotenv
+TS_IP_ADDRESS=100.111.60.44
+```
+
+構文検証後、Caddyだけを再作成します。
+
+```bash
+docker compose config --quiet
+docker compose up -d --force-recreate caddy
+docker compose logs --tail=100 caddy
+```
+
+IP接続クライアントは、サーバー証明書検証用として`pki/client/server-ca.pem`も信頼する必要があります。AndroidではCA証明書としてインストールし、FolderSyncの「自己署名証明書を許可」は無効のままにします。発行後は`pki/offline`を直ちにオフライン保管へ戻してください。
+
+接続先は`https://100.111.60.44/`です。MagicDNS接続では`server-ca.pem`を指定する必要はありません。
 
 ## WebDAV操作
 

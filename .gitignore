@@ -12,6 +12,8 @@ backups/
 data/
 pki/
 tailscale-config/
+caddy-ip-sites/*
+!caddy-ip-sites/.gitkeep
 *.pem
 *.key
 *.p12

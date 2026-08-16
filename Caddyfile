@@ -1,3 +1,10 @@
+{
+    # IP clients commonly omit SNI. Compose selects the direct Tailscale IP
+    # when configured, otherwise the public MagicDNS certificate remains the
+    # default.
+    default_sni {$TLS_DEFAULT_SNI}
+}
+
 {$TS_CERT_DOMAIN} {
     bind 127.0.0.1
     tls {
@@ -11,3 +18,7 @@
         flush_interval -1
     }
 }
+
+# Empty globs are allowed. scripts/enable-ip-access.sh installs an additional
+# mTLS site here without weakening the public MagicDNS site above.
+import /etc/caddy/ip-sites/*.caddy
