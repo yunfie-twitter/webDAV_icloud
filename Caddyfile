@@ -1,0 +1,12 @@
+https://:443 {
+    tls /etc/caddy/pki/server.pem /etc/caddy/pki/server-key.pem {
+        protocols tls1.3
+        client_auth {
+            mode require_and_verify
+            trust_pool file /etc/caddy/pki/client-ca.pem
+        }
+    }
+    reverse_proxy gateway:8080 {
+        flush_interval -1
+    }
+}

@@ -1,0 +1,31 @@
+[Unit]
+Description=iCloud WebDAV Host Key Broker
+After=local-fs.target
+ConditionPathExists=/dev/tpmrm0
+
+[Service]
+Type=simple
+User=icloud-keybroker
+Group=icloud-keybroker
+UMask=0007
+RuntimeDirectory=icloud-keybroker
+RuntimeDirectoryMode=0750
+ExecStart=/usr/local/bin/icloud-keybroker --provider linux-tpm --tpm-context 0x81000001 --tpm-public-key /etc/icloud-keybroker/primary-kek.pem --socket /run/icloud-keybroker/keybroker.sock
+Restart=on-failure
+RestartSec=5
+NoNewPrivileges=yes
+PrivateTmp=yes
+ProtectSystem=strict
+ProtectHome=yes
+ProtectKernelTunables=yes
+ProtectKernelModules=yes
+ProtectControlGroups=yes
+RestrictSUIDSGID=yes
+LockPersonality=yes
+DevicePolicy=closed
+DeviceAllow=/dev/tpmrm0 rw
+ReadOnlyPaths=/etc/icloud-keybroker
+ReadWritePaths=/run/icloud-keybroker
+
+[Install]
+WantedBy=multi-user.target

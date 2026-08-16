@@ -1,0 +1,123 @@
+services:
+  gateway:
+    build: .
+    image: icloud-webdav-gateway:local
+    restart: unless-stopped
+    command:
+      - serve
+      - --config
+      - /data/icloud-webdav.toml
+      - --host
+      - 0.0.0.0
+      - --port
+      - "8080"
+      - --allow-insecure-remote
+      - --non-interactive
+    environment:
+      ICLOUD_APPLE_ID: ${ICLOUD_APPLE_ID:?set ICLOUD_APPLE_ID}
+      ICLOUD_PASSWORD: ${ICLOUD_PASSWORD:-}
+      ICLOUD_WEBDAV_PASSWORD: ${ICLOUD_WEBDAV_PASSWORD:?set ICLOUD_WEBDAV_PASSWORD}
+      DATABASE_URL: postgresql://gateway:${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD}@postgres:5432/icloud_gateway
+      VALKEY_URL: redis://valkey:6379/0
+    volumes:
+      - gateway-data:/data
+      - ${KEYBROKER_SOCKET:-/run/icloud-keybroker/keybroker.sock}:/run/keybroker/keybroker.sock
+    group_add:
+      - ${KEYBROKER_GID:-10001}
+    depends_on:
+      postgres:
+        condition: service_healthy
+      valkey:
+        condition: service_healthy
+    networks: [internal, edge]
+
+  caddy:
+    image: caddy:2.10-alpine
+    restart: unless-stopped
+    network_mode: service:tailscale
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - ${MTLS_PKI_DIR:-./pki}/runtime:/etc/caddy/pki:ro
+      - caddy-data:/data
+      - caddy-config:/config
+    depends_on: [gateway, tailscale]
+
+  tailscale:
+    image: tailscale/tailscale:latest
+    hostname: ${TS_HOSTNAME:?run ./setup.sh to choose a privacy-safe hostname}
+    restart: unless-stopped
+    environment:
+      TS_AUTHKEY: ${TS_AUTHKEY:?run ./setup.sh to set an OAuth client secret}
+      TS_AUTH_ONCE: "true"
+      TS_EXTRA_ARGS: ${TS_EXTRA_ARGS:?run ./setup.sh to set an approved tag}
+      TS_SERVE_CONFIG: /config/serve.json
+      TS_STATE_DIR: /var/lib/tailscale
+      TS_USERSPACE: "false"
+    volumes:
+      - tailscale-state:/var/lib/tailscale
+      - ${TS_SERVE_CONFIG_DIR:-./tailscale-config}:/config:ro
+    devices:
+      - /dev/net/tun:/dev/net/tun
+    cap_add:
+      - NET_ADMIN
+      - SYS_MODULE
+    networks: [edge]
+
+  auth:
+    image: icloud-webdav-gateway:local
+    profiles: [setup]
+    entrypoint: ["icloud-webdav"]
+    command:
+      - auth
+      - --config
+      - /data/icloud-webdav.toml
+      - --auth-method
+      - ${ICLOUD_AUTH_METHOD:-sms}
+    environment:
+      ICLOUD_APPLE_ID: ${ICLOUD_APPLE_ID:?set ICLOUD_APPLE_ID}
+      ICLOUD_PASSWORD: ${ICLOUD_PASSWORD:-}
+    volumes:
+      - gateway-data:/data
+    networks: [edge]
+
+  postgres:
+    image: postgres:17-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: icloud_gateway
+      POSTGRES_USER: gateway
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD}
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U gateway -d icloud_gateway"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+    networks: [internal]
+
+  valkey:
+    image: valkey/valkey:8-alpine
+    restart: unless-stopped
+    command: ["valkey-server", "--appendonly", "yes", "--appendfsync", "everysec"]
+    volumes:
+      - valkey-data:/data
+    healthcheck:
+      test: ["CMD", "valkey-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+    networks: [internal]
+
+networks:
+  internal:
+    internal: true
+  edge:
+
+volumes:
+  gateway-data:
+  postgres-data:
+  valkey-data:
+  caddy-data:
+  caddy-config:
+  tailscale-state:

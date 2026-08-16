@@ -1,0 +1,45 @@
+version = 1
+
+[icloud]
+apple_id = "you@example.com"
+apple_password_env = "ICLOUD_PASSWORD"
+auth_method = "sms"
+drive_cache_seconds = 0
+region = "global"
+session_dir = ".state/icloudpy"
+
+[webdav]
+host = "0.0.0.0"
+port = 8080
+user = "icloud"
+password_env = "ICLOUD_WEBDAV_PASSWORD"
+allow_insecure_remote = true
+
+[database]
+url_env = "DATABASE_URL"
+
+[valkey]
+url_env = "VALKEY_URL"
+namespace = "default"
+lock_ttl = 120
+change_limit = 1000
+delete_ratio_percent = 20
+
+[key_broker]
+endpoint = "unix:///run/keybroker/keybroker.sock"
+
+[encryption]
+enabled = true
+recovery_public_file = ".state/recovery-public.json"
+vault_folder = ".icloud-ftp-vault"
+strict_plaintext = true
+kem = "ML-KEM-768"
+hybrid_x25519 = true
+chunk_size_mb = 8
+retention_days = 30
+small_versions = 10
+medium_versions = 5
+large_versions = 3
+medium_threshold_mb = 100
+large_threshold_mb = 1024
+capacity_limit_gb = 0
