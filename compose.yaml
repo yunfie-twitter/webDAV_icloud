@@ -47,6 +47,30 @@ services:
       TLS_DEFAULT_SNI: ${TS_IP_ADDRESS:-${TS_CERT_DOMAIN:?set the full MagicDNS name ending in .ts.net}}
     depends_on: [gateway, tailscale]
 
+  # Temporary SFTP compatibility layer. It converts SFTP operations to the
+  # existing internal WebDAV API, so encryption, locking, versioning, and GC
+  # remain owned by the gateway. Enable explicitly with --profile sftp.
+  sftp:
+    image: rclone/rclone:1.74.2
+    profiles: [sftp]
+    restart: unless-stopped
+    network_mode: service:tailscale
+    entrypoint: ["/bin/sh", "/opt/icloud-sftp/start-sftp.sh"]
+    environment:
+      ICLOUD_WEBDAV_PASSWORD: ${ICLOUD_WEBDAV_PASSWORD:?set ICLOUD_WEBDAV_PASSWORD}
+      SFTP_CACHE_SIZE: ${SFTP_CACHE_SIZE:-1G}
+    volumes:
+      - ./scripts/start-sftp.sh:/opt/icloud-sftp/start-sftp.sh:ro
+      - ${SFTP_CONFIG_DIR:-./sftp}:/etc/icloud-sftp:ro
+    tmpfs:
+      - /runtime:rw,nosuid,nodev,noexec,size=16m,mode=0700
+      - /cache:rw,nosuid,nodev,noexec,size=${SFTP_CACHE_SIZE:-1G},mode=0700
+    read_only: true
+    cap_drop: [ALL]
+    security_opt:
+      - no-new-privileges:true
+    depends_on: [gateway, tailscale]
+
   tailscale:
     image: tailscale/tailscale:latest
     hostname: ${TS_HOSTNAME:?run ./setup.sh to choose a privacy-safe hostname}

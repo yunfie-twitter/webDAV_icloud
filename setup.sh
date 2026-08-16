@@ -122,12 +122,15 @@ keybroker_socket=${selected_socket:-$keybroker_socket}
 webdav_password=$(openssl rand -hex 32)
 postgres_password=$(openssl rand -hex 32)
 
-mkdir -p tailscale-config caddy-ip-sites
+mkdir -p tailscale-config caddy-ip-sites sftp
 printf '%s\n' \
   '{' \
   '  "TCP": {' \
   '    "443": {' \
   '      "TCPForward": "127.0.0.1:443"' \
+  '    },' \
+  '    "2222": {' \
+  '      "TCPForward": "127.0.0.1:2022"' \
   '    }' \
   '  }' \
   '}' > tailscale-config/serve.json
@@ -171,6 +174,8 @@ trap 'restore_tty; rm -f "$environment_file"' EXIT HUP INT TERM
   printf 'TS_SERVE_CONFIG_DIR=%s\n' "$(env_quote './tailscale-config')"
   printf 'MTLS_PKI_DIR=%s\n' "$(env_quote './pki')"
   printf 'CADDY_IP_SITES_DIR=%s\n' "$(env_quote './caddy-ip-sites')"
+  printf 'SFTP_CONFIG_DIR=%s\n' "$(env_quote './sftp')"
+  printf 'SFTP_CACHE_SIZE=%s\n' "$(env_quote '1G')"
   printf 'KEYBROKER_SOCKET=%s\n' "$(env_quote "$keybroker_socket")"
   printf 'KEYBROKER_GID=10001\n'
 } > "$environment_file"

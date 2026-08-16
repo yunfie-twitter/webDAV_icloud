@@ -211,6 +211,57 @@ IP接続クライアントは、サーバー証明書検証用として`pki/clie
 
 接続先は`https://100.111.60.44/`です。MagicDNS接続では`server-ca.pem`を指定する必要はありません。
 
+### 仮SFTP互換レイヤー
+
+`sftp` Compose profileは、rcloneのSFTP VFSを内部WebDAVへ接続する暫定アダプターです。SFTPの操作は必ずGatewayを通るため、iCloudへ平文ファイルを直接保存せず、既存の暗号化CAS、PostgreSQL transaction、Valkey lock、version retentionを共有します。外部ポートはTailscale TCP `2222`だけで、SSH公開鍵認証のみを許可します。
+
+Android用クライアント鍵を作成します。秘密鍵のpassphraseは空にしないでください。
+
+```bash
+mkdir -p .state/sftp-client
+ssh-keygen -t ed25519 -a 100 \
+  -C icloud-webdav-android \
+  -f .state/sftp-client/android-sftp-key
+
+sh scripts/setup-sftp.sh \
+  --authorized-key .state/sftp-client/android-sftp-key.pub
+```
+
+既存環境では`tailscale-config/serve.json`を次の内容へ更新します。新規`setup.sh`はこの設定を自動生成します。
+
+```json
+{
+  "TCP": {
+    "443": {
+      "TCPForward": "127.0.0.1:443"
+    },
+    "2222": {
+      "TCPForward": "127.0.0.1:2022"
+    }
+  }
+}
+```
+
+Tailscaleを再読込し、明示的にSFTP profileを起動します。
+
+```bash
+docker compose restart tailscale
+docker compose --profile sftp up -d sftp
+docker compose logs --tail=100 sftp
+```
+
+接続テスト:
+
+```bash
+sftp -P 2222 \
+  -i .state/sftp-client/android-sftp-key \
+  icloud@100.111.60.44
+```
+
+FolderSyncではSFTP、server `100.111.60.44`、port `2222`、user `icloud`、private key `android-sftp-key`、作成時のkey passphraseを設定し、初回に表示されるhost key fingerprintを`setup-sftp.sh`の出力と照合します。
+
+この暫定版はrandom-write互換性のため、closeされるまでのアップロード平文を`/cache`のサイズ制限付きtmpfsへ保持します。既定上限は`SFTP_CACHE_SIZE=1G`です。最大同時アップロードより大きく設定し、ホストのswapは無効化または暗号化してください。chmod/chown、symlink、mtime保存は対象外です。恒久版ではGateway native SFTP実装へ置き換える予定です。
+
 ## WebDAV操作
 
 - `PROPFIND`: 仮想directory・metadata・ETag
