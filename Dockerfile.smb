@@ -1,0 +1,16 @@
+FROM rclone/rclone:1.74.2
+
+RUN apk add --no-cache \
+      fuse3 \
+      samba-common-tools \
+      samba-server \
+      tini \
+      util-linux && \
+    adduser -S -D -H -u 10002 -s /sbin/nologin smbguest && \
+    mkdir -p /cache /runtime /srv/icloud /var/cache/samba /var/lib/samba /run/samba && \
+    chown -R smbguest:smbguest /cache /srv/icloud && \
+    printf '%s\n' user_allow_other > /etc/fuse.conf
+
+COPY --chmod=0555 scripts/start-smb.sh /usr/local/bin/start-smb.sh
+
+ENTRYPOINT ["/sbin/tini", "--", "/usr/local/bin/start-smb.sh"]

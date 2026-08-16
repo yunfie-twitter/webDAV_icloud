@@ -98,6 +98,38 @@ services:
       - no-new-privileges:true
     depends_on: [gateway, tailscale]
 
+  # Preferred filesystem client mode. Samba serves an anonymous SMB2/SMB3
+  # share backed by an rclone FUSE mount of the internal encrypted WebDAV API.
+  # Port 445 is reachable only through the Tailscale network namespace.
+  smb:
+    build:
+      context: .
+      dockerfile: Dockerfile.smb
+    image: icloud-webdav-smb:local
+    profiles: [smb]
+    restart: unless-stopped
+    network_mode: service:tailscale
+    environment:
+      ICLOUD_WEBDAV_PASSWORD: ${ICLOUD_WEBDAV_PASSWORD:?set ICLOUD_WEBDAV_PASSWORD}
+      SMB_CACHE_SIZE: ${SMB_CACHE_SIZE:-2G}
+    devices:
+      - /dev/fuse:/dev/fuse
+    cap_add:
+      - SYS_ADMIN
+    security_opt:
+      - apparmor:unconfined
+      - no-new-privileges:true
+    tmpfs:
+      - /runtime:rw,nosuid,nodev,noexec,size=16m,mode=0700
+      - /cache:rw,nosuid,nodev,noexec,size=${SMB_CACHE_SIZE:-2G},mode=0700
+      - /srv/icloud:rw,nosuid,nodev,noexec,size=16m,mode=0770,uid=10002,gid=10002
+      - /var/cache/samba:rw,nosuid,nodev,noexec,size=16m,mode=0750
+      - /var/lib/samba:rw,nosuid,nodev,noexec,size=32m,mode=0750
+      - /run/samba:rw,nosuid,nodev,noexec,size=16m,mode=0750
+    read_only: true
+    stop_grace_period: 30s
+    depends_on: [gateway, tailscale]
+
   tailscale:
     image: tailscale/tailscale:latest
     hostname: ${TS_HOSTNAME:?run ./setup.sh to choose a privacy-safe hostname}

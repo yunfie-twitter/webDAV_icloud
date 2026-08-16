@@ -1,19 +1,19 @@
-# iCloud Encrypted WebDAV Gateway
+# iCloud Encrypted SMB / WebDAV Gateway
 
-WebDAVクライアントには平文の仮想ファイルシステムを見せ、iCloud Driveにはランダム名の暗号化チャンク・暗号化manifest・鍵capsuleだけを保存するゲートウェイです。入口はFTPではなくWebDAVです。
+SMBクライアントには平文の匿名共有を見せ、iCloud Driveにはランダム名の暗号化チャンク・暗号化manifest・鍵capsuleだけを保存するゲートウェイです。SMB操作は内部WebDAV APIへ変換されるため、暗号化、version、locking、retentionは同じGatewayが担当します。
 
 > **注意:** `icloudpy` はApple公式SDKではありません。Apple側の仕様変更、認証失効、レート制限で停止する可能性があります。本ソフト単独を唯一のバックアップにしないでください。
 
 ## 構成
 
 ```text
-WebDAV client
+SMB client（anonymous guest）
   │ Tailscale / WireGuard
   ▼
-Tailscale sidecar（TCP 443 raw forward、Funnel無効）
-  │ TLS 1.3 + mTLSをそのまま転送
+Tailscale sidecar（TCP 445 raw forward、Funnel無効）
+  │
   ▼
-Caddy ── HTTP (Docker edge network only) ── Gateway
+Samba ── rclone FUSE ── HTTP (Docker edge network only) ── Gateway
                                              ├── PostgreSQL（正本）
                                              ├── Valkey（補助）
                                              ├── Host Key Broker
@@ -21,7 +21,7 @@ Caddy ── HTTP (Docker edge network only) ── Gateway
                                              └── icloudpy ── iCloud
 ```
 
-ホストへ公開する`ports`はありません。Tailscaleの443番だけがtailnet内で受け、`TS_SERVE_CONFIG`のraw TCP forwardによりCaddyのTLS 1.3 + mTLSへ渡します。Funnelは構成しません。PostgreSQLとValkeyもDocker internal networkだけです。
+ホストへ公開する`ports`はありません。Tailscaleの445番をtailnet内だけで受け、`TS_SERVE_CONFIG`のraw TCP forwardによりSambaへ渡します。443番のWebDAV管理・復旧経路も残します。Funnelは構成しません。PostgreSQLとValkeyもDocker internal networkだけです。
 
 Tailscale identityは`tailscale-state` volumeへ永続化し、`TS_AUTH_ONCE=true`を使います。OAuth client secretには`?ephemeral=false`を付け、OAuth clientで許可したtagを`TS_EXTRA_ARGS=--advertise-tags=tag:...`へ渡します。Serve設定はfsnotifyのため`tailscale-config`directory全体をread-only mountします。
 
@@ -131,6 +131,7 @@ setupは次を対話実行します。
 - mTLS server/client PKI生成
 - ML-KEM Recovery Secretの一度だけの表示
 - `.env`をmode 600で保存し、希望時だけstack起動
+- 匿名SMB `iCloud`共有とTailscale TCP 445転送の有効化
 
 hostnameはtailnet管理者から見えます。Tailscaleの公開CA証明書を取得する完全なDNS名はcertificate-transparency logへ現れ得るため、氏名、住所、組織内機密名を使わないでください。TailscaleはTCP 443をraw転送し、Caddyが公開サーバー証明書とprivate client CAによるmTLSを終端します。
 
@@ -178,7 +179,7 @@ icloud-webdav auth --config /data/icloud-webdav.toml --auth-method sms
 
 ```bash
 docker compose config
-docker compose up -d --build
+docker compose --profile smb up -d --build
 ```
 
 CaddyはTailscaleの公開HTTPS証明書を自動取得・更新します。MagicDNS名で接続するWebDAVクライアントへ設定する私設PKIは`pki/client/client.pem`と`client-key.pem`だけです。Basic認証はTailscale + mTLSの内側でのみ使います。
@@ -211,7 +212,37 @@ IP接続クライアントは、サーバー証明書検証用として`pki/clie
 
 接続先は`https://100.111.60.44/`です。MagicDNS接続では`server-ca.pem`を指定する必要はありません。
 
-### 仮SFTP互換レイヤー
+### 匿名SMB（標準クライアント経路）
+
+`smb` Compose profileは、匿名guest専用の読み書き可能な`iCloud`共有を提供します。ユーザー名・パスワード・client証明書は不要です。Sambaから内部WebDAVへ接続する資格情報はコンテナ内だけに置かれ、SMB利用者には公開されません。
+
+既存サーバーを`100.111.60.44`でSMB統一モードへ移行します。
+
+```bash
+sh scripts/setup-smb.sh --public-ip 100.111.60.44
+
+docker compose --profile sftp --profile ftps stop sftp ftps
+docker compose restart tailscale
+docker compose --profile smb up -d --build smb
+docker compose --profile smb ps
+docker compose logs --tail=100 smb tailscale
+```
+
+AndroidのSMBクライアントには次を設定します。
+
+- server: `100.111.60.44`
+- port: `445`
+- share: `iCloud`
+- authentication: anonymous / guest
+- username/password/domain: 空欄
+
+Windowsのパスは`\\100.111.60.44\iCloud`です。ただしWindows 11 24H2以降は既定でguestアクセスを拒否し、SMB signingも必須です。guest認証はsigningやSMB encryptionを利用できないため、この匿名モードはWindowsの安全な既定値とは互換になりません。Windows側のポリシーを弱めずに利用する場合は、将来の認証付きSMBモードを使用してください。
+
+匿名共有では、Tailscale ACLでTCP 445へ到達できる端末は全ファイルを読み書き・削除できます。Gateway用tag宛ての445番は利用端末だけに許可し、インターネットやLANへ直接公開しないでください。通信路の秘匿性はTailscale WireGuardが担当します。
+
+random-write互換性のため、closeまでのアップロード平文をサイズ制限付きtmpfsへ保持します。既定上限は`SMB_CACHE_SIZE=2G`です。最大同時アップロードより大きく設定し、ホストのswapは無効化または暗号化してください。
+
+### 旧SFTP互換レイヤー
 
 `sftp` Compose profileは、rcloneのSFTP VFSを内部WebDAVへ接続する暫定アダプターです。SFTPの操作は必ずGatewayを通るため、iCloudへ平文ファイルを直接保存せず、既存の暗号化CAS、PostgreSQL transaction、Valkey lock、version retentionを共有します。外部ポートはTailscale TCP `2222`だけで、SSH公開鍵認証のみを許可します。
 
@@ -227,7 +258,7 @@ sh scripts/setup-sftp.sh \
   --authorized-key .state/sftp-client/android-sftp-key.pub
 ```
 
-既存環境では`tailscale-config/serve.json`を次の内容へ更新します。新規`setup.sh`はこの設定を自動生成します。
+SFTPへ一時的に戻す場合は`tailscale-config/serve.json`を次の内容へ更新します。
 
 ```json
 {
@@ -262,7 +293,7 @@ FolderSyncではSFTP、server `100.111.60.44`、port `2222`、user `icloud`、pr
 
 この暫定版はrandom-write互換性のため、closeされるまでのアップロード平文を`/cache`のサイズ制限付きtmpfsへ保持します。既定上限は`SFTP_CACHE_SIZE=1G`です。最大同時アップロードより大きく設定し、ホストのswapは無効化または暗号化してください。chmod/chown、symlink、mtime保存は対象外です。恒久版ではGateway native SFTP実装へ置き換える予定です。
 
-### 仮FTPS互換レイヤー
+### 旧FTPS互換レイヤー
 
 `ftps` Compose profileは、Implicit FTPSを内部WebDAVへ変換します。接続直後からTLSとなる外部ポート`990`と、パッシブデータポート`30000-30009`だけをTailscale Serveで転送します。平文FTP、Active mode、インターネットへの直接公開には対応しません。ファイル操作はGatewayの暗号化CAS、lock、version、retentionをそのまま利用します。
 

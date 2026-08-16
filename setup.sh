@@ -130,41 +130,8 @@ printf '%s\n' \
   '    "443": {' \
   '      "TCPForward": "127.0.0.1:443"' \
   '    },' \
-  '    "2222": {' \
-  '      "TCPForward": "127.0.0.1:2022"' \
-  '    },' \
-  '    "990": {' \
-  '      "TCPForward": "127.0.0.1:2990"' \
-  '    },' \
-  '    "30000": {' \
-  '      "TCPForward": "127.0.0.1:30000"' \
-  '    },' \
-  '    "30001": {' \
-  '      "TCPForward": "127.0.0.1:30001"' \
-  '    },' \
-  '    "30002": {' \
-  '      "TCPForward": "127.0.0.1:30002"' \
-  '    },' \
-  '    "30003": {' \
-  '      "TCPForward": "127.0.0.1:30003"' \
-  '    },' \
-  '    "30004": {' \
-  '      "TCPForward": "127.0.0.1:30004"' \
-  '    },' \
-  '    "30005": {' \
-  '      "TCPForward": "127.0.0.1:30005"' \
-  '    },' \
-  '    "30006": {' \
-  '      "TCPForward": "127.0.0.1:30006"' \
-  '    },' \
-  '    "30007": {' \
-  '      "TCPForward": "127.0.0.1:30007"' \
-  '    },' \
-  '    "30008": {' \
-  '      "TCPForward": "127.0.0.1:30008"' \
-  '    },' \
-  '    "30009": {' \
-  '      "TCPForward": "127.0.0.1:30009"' \
+  '    "445": {' \
+  '      "TCPForward": "127.0.0.1:1445"' \
   '    }' \
   '  }' \
   '}' > tailscale-config/serve.json
@@ -212,6 +179,7 @@ trap 'restore_tty; rm -f "$environment_file"' EXIT HUP INT TERM
   printf 'SFTP_CACHE_SIZE=%s\n' "$(env_quote '1G')"
   printf 'ICLOUD_FTPS_PASSWORD=%s\n' "$(env_quote "$ftps_password")"
   printf 'FTPS_CACHE_SIZE=%s\n' "$(env_quote '1G')"
+  printf 'SMB_CACHE_SIZE=%s\n' "$(env_quote '2G')"
   printf 'KEYBROKER_SOCKET=%s\n' "$(env_quote "$keybroker_socket")"
   printf 'KEYBROKER_GID=10001\n'
 } > "$environment_file"
@@ -223,6 +191,7 @@ echo "WebDAV username: icloud"
 echo "WebDAV password: generated and stored as ICLOUD_WEBDAV_PASSWORD in chmod 600 .env"
 echo "FTPS username: icloud"
 echo "FTPS password: generated separately and stored as ICLOUD_FTPS_PASSWORD in chmod 600 .env"
+echo "SMB share: iCloud (anonymous guest, no username or password)"
 
 docker compose config --quiet
 docker compose build gateway
@@ -239,17 +208,18 @@ fi
 echo "Starting interactive Apple ID authentication ($auth_method)."
 docker compose run --rm --no-deps auth
 
-if yes_no 'Start the complete stack now? [Y/n]: ' y; then
+if yes_no 'Start the stack with anonymous SMB now? [Y/n]: ' y; then
   if [ ! -S "$keybroker_socket" ]; then
     echo "Key Broker socket not found: $keybroker_socket" >&2
     echo "Authentication and configuration are complete, but the stack was not started." >&2
-    echo "Start the host Key Broker, then run: docker compose up -d" >&2
+    echo "Start the host Key Broker, then run: docker compose --profile smb up -d --build" >&2
     exit 0
   fi
-  docker compose up -d
+  docker compose --profile smb up -d --build
   echo "Tailscale status: docker compose exec tailscale tailscale status"
 fi
 
 echo "Setup complete. WebDAV password was generated and stored in .env."
+echo "Anonymous SMB is available as the iCloud share over Tailscale TCP 445."
 echo "Import the files under pki/client into the WebDAV client."
 echo "Move pki/offline to offline storage after issuing required certificates."
