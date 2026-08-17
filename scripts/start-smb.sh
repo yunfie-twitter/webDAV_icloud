@@ -94,8 +94,9 @@ rclone mount encrypted-webdav: "$mount_path" \
   --allow-other \
   --uid 10002 \
   --gid 10002 \
-  --file-perms 0660 \
-  --dir-perms 0770 \
+  --umask 000 \
+  --file-perms 0666 \
+  --dir-perms 0777 \
   --cache-dir /cache \
   --vfs-cache-mode full \
   --vfs-cache-max-size "$SMB_CACHE_SIZE" \
