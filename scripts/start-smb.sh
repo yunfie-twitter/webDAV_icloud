@@ -74,6 +74,10 @@ cat > "$samba_config" <<'EOF'
     guest only = yes
     force user = smbguest
     force group = smbguest
+    # rclone FUSE exposes synthetic owner/mode values, not persistent POSIX or
+    # Windows ACLs. Let the forced guest UID and FUSE permissions authorize IO.
+    nt acl support = no
+    acl allow execute always = yes
     create mask = 0660
     force create mode = 0660
     directory mask = 0770
