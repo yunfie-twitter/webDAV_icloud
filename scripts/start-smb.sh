@@ -75,8 +75,6 @@ cat > "$samba_config" <<'EOF'
     strict locking = yes
 EOF
 
-testparm -s "$samba_config" >/dev/null
-
 rclone mount encrypted-webdav: "$mount_path" \
   --config "$rclone_config" \
   --allow-other \
