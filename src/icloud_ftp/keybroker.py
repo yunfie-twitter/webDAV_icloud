@@ -186,10 +186,23 @@ class LinuxTpmRsaProvider(KeyProvider):
         self.key_id = "tpm-rsa-" + hashlib.sha256(expected).hexdigest()[:24]
 
     @staticmethod
-    def _label(context: bytes) -> str:
+    def _context_hash(context: bytes) -> str:
         return hashlib.sha256(context).hexdigest()
 
+    @staticmethod
+    def _label(context: bytes) -> str:
+        """Return a full-strength OAEP label accepted by tpm2-tools 5.6.
+
+        ``tpm2_rsaencrypt`` appends a NUL byte and limits a string label to 63
+        characters. A SHA-256 hex digest is 64 characters, while unpadded
+        base64url preserves all 256 bits in 43 safe characters.
+        """
+        return base64.urlsafe_b64encode(hashlib.sha256(context).digest()).rstrip(
+            b"="
+        ).decode("ascii")
+
     def wrap(self, plaintext_key: bytes, context: bytes) -> dict[str, Any]:
+        label = self._label(context)
         result = subprocess.run(
             [
                 self.rsaencrypt,
@@ -197,10 +210,8 @@ class LinuxTpmRsaProvider(KeyProvider):
                 self.key_context,
                 "-s",
                 "oaep",
-                "-g",
-                "sha256",
                 "-l",
-                self._label(context),
+                label,
             ],
             input=plaintext_key,
             check=True,
@@ -213,14 +224,21 @@ class LinuxTpmRsaProvider(KeyProvider):
             "algorithm": "RSA-OAEP-SHA256",
             "provider": self.name,
             "wrapped_key": _b64(result.stdout),
-            "metadata": {"context_sha256": self._label(context)},
+            "metadata": {
+                "context_sha256": self._context_hash(context),
+                "oaep_label": label,
+            },
         }
 
     def unwrap(self, envelope: dict[str, Any], context: bytes) -> bytes:
         if envelope.get("key_id") != self.key_id:
             raise ValueError("wrapped key belongs to another TPM key")
-        if envelope.get("metadata", {}).get("context_sha256") != self._label(context):
+        metadata = envelope.get("metadata", {})
+        if metadata.get("context_sha256") != self._context_hash(context):
             raise ValueError("wrapped key context mismatch")
+        label = self._label(context)
+        if metadata.get("oaep_label") != label:
+            raise ValueError("wrapped key OAEP label mismatch")
         result = subprocess.run(
             [
                 self.rsadecrypt,
@@ -228,10 +246,8 @@ class LinuxTpmRsaProvider(KeyProvider):
                 self.key_context,
                 "-s",
                 "oaep",
-                "-g",
-                "sha256",
                 "-l",
-                self._label(context),
+                label,
             ],
             input=_unb64(envelope["wrapped_key"]),
             check=True,

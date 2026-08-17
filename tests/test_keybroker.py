@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import hashlib
 import io
 import json
 
@@ -148,10 +149,19 @@ def test_linux_tpm_provider_uses_oaep_sha256_scheme(tmp_path, monkeypatch):
     provider = LinuxTpmRsaProvider("0x81000003", public_key)
     envelope = provider.wrap(b"d" * 32, b"context")
     assert provider.unwrap(envelope, b"context") == b"d" * 32
+    expected_label = provider._label(b"context")
+    assert len(expected_label) == 43
+    assert envelope["metadata"] == {
+        "context_sha256": hashlib.sha256(b"context").hexdigest(),
+        "oaep_label": expected_label,
+    }
 
     crypto_calls = [call for call in calls if call[0] != "tpm2_readpublic"]
     assert all(call[call.index("-s") + 1] == "oaep" for call in crypto_calls)
-    assert all(call[call.index("-g") + 1] == "sha256" for call in crypto_calls)
+    assert all("-g" not in call for call in crypto_calls)
+    assert all(
+        call[call.index("-l") + 1] == expected_label for call in crypto_calls
+    )
 
 
 def test_resumed_rewrap_rejects_a_corrupt_existing_new_envelope(tmp_path):

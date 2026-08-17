@@ -183,6 +183,7 @@ trap 'restore_tty; rm -f "$environment_file"' EXIT HUP INT TERM
   printf 'SMB_HOST_BIND=%s\n' "$(env_quote '0.0.0.0')"
   printf 'SMB_HOST_PORT=445\n'
   printf 'KEYBROKER_SOCKET=%s\n' "$(env_quote "$keybroker_socket")"
+  printf 'KEYBROKER_SOCKET_DIR=%s\n' "$(env_quote "$(dirname -- "$keybroker_socket")")"
   printf 'KEYBROKER_GID=10001\n'
 } > "$environment_file"
 mv "$environment_file" .env

@@ -21,7 +21,10 @@ services:
       VALKEY_URL: redis://valkey:6379/0
     volumes:
       - gateway-data:/data
-      - ${KEYBROKER_SOCKET:-/run/icloud-keybroker/keybroker.sock}:/run/keybroker/keybroker.sock
+      # Mount the directory rather than the socket inode. The broker unlinks
+      # and recreates its socket on restart; a file bind mount would otherwise
+      # leave the running container connected to the stale inode.
+      - ${KEYBROKER_SOCKET_DIR:-/run/icloud-keybroker}:/run/keybroker:ro
     group_add:
       - ${KEYBROKER_GID:-10001}
     depends_on:
