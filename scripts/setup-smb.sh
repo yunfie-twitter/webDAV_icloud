@@ -105,3 +105,6 @@ echo "Stop legacy adapters, restart Tailscale, then start SMB:"
 echo "  docker compose --profile sftp --profile ftps stop sftp ftps"
 echo "  docker compose restart tailscale"
 echo "  docker compose --profile smb up -d --build smb"
+echo
+echo "Optional trusted-LAN host publication (anonymous read/write):"
+echo "  docker compose -f compose.yaml -f compose.smb-host.yaml --profile smb up -d --build"

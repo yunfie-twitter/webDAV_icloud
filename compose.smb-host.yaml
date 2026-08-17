@@ -1,0 +1,11 @@
+services:
+  # The SMB daemon shares the Tailscale container's network namespace, so the
+  # host port must be published by the tailscale service. Use this override
+  # only on a trusted LAN and restrict TCP 445 with the host firewall.
+  tailscale:
+    ports:
+      - target: 1445
+        published: "${SMB_HOST_PORT:-445}"
+        host_ip: "${SMB_HOST_BIND:-0.0.0.0}"
+        protocol: tcp
+

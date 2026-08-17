@@ -32,7 +32,9 @@ cat > "$samba_config" <<'EOF'
     guest account = smbguest
     restrict anonymous = 0
 
-    interfaces = lo
+    # Loopback is used by Tailscale Serve. eth0 accepts the optional Docker
+    # host-port mapping from compose.smb-host.yaml.
+    interfaces = lo eth0
     bind interfaces only = yes
     smb ports = 1445
     disable netbios = yes

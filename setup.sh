@@ -180,6 +180,8 @@ trap 'restore_tty; rm -f "$environment_file"' EXIT HUP INT TERM
   printf 'ICLOUD_FTPS_PASSWORD=%s\n' "$(env_quote "$ftps_password")"
   printf 'FTPS_CACHE_SIZE=%s\n' "$(env_quote '1G')"
   printf 'SMB_CACHE_SIZE=%s\n' "$(env_quote '2G')"
+  printf 'SMB_HOST_BIND=%s\n' "$(env_quote '0.0.0.0')"
+  printf 'SMB_HOST_PORT=445\n'
   printf 'KEYBROKER_SOCKET=%s\n' "$(env_quote "$keybroker_socket")"
   printf 'KEYBROKER_GID=10001\n'
 } > "$environment_file"

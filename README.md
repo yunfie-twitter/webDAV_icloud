@@ -21,7 +21,7 @@ Samba ── rclone FUSE ── HTTP (Docker edge network only) ── Gateway
                                              └── icloudpy ── iCloud
 ```
 
-ホストへ公開する`ports`はありません。Tailscaleの445番をtailnet内だけで受け、`TS_SERVE_CONFIG`のraw TCP forwardによりSambaへ渡します。443番のWebDAV管理・復旧経路も残します。Funnelは構成しません。PostgreSQLとValkeyもDocker internal networkだけです。
+標準構成ではホストへ公開する`ports`はありません。Tailscaleの445番をtailnet内だけで受け、`TS_SERVE_CONFIG`のraw TCP forwardによりSambaへ渡します。443番のWebDAV管理・復旧経路も残します。Funnelは構成しません。PostgreSQLとValkeyもDocker internal networkだけです。信頼済みLANへSMBを直接公開する場合だけ`compose.smb-host.yaml`を追加します。
 
 Tailscale identityは`tailscale-state` volumeへ永続化し、`TS_AUTH_ONCE=true`を使います。OAuth client secretには`?ephemeral=false`を付け、OAuth clientで許可したtagを`TS_EXTRA_ARGS=--advertise-tags=tag:...`へ渡します。Serve設定はfsnotifyのため`tailscale-config`directory全体をread-only mountします。
 
@@ -241,6 +241,45 @@ Windowsのパスは`\\100.111.60.44\iCloud`です。ただしWindows 11 24H2以�
 匿名共有では、Tailscale ACLでTCP 445へ到達できる端末は全ファイルを読み書き・削除できます。Gateway用tag宛ての445番は利用端末だけに許可し、インターネットやLANへ直接公開しないでください。通信路の秘匿性はTailscale WireGuardが担当します。
 
 random-write互換性のため、closeまでのアップロード平文をサイズ制限付きtmpfsへ保持します。既定上限は`SMB_CACHE_SIZE=2G`です。最大同時アップロードより大きく設定し、ホストのswapは無効化または暗号化してください。
+
+#### Linuxホスト/LANにもTCP 445を公開する
+
+匿名SMBをホスト側でも受ける場合は、明示的なoverrideを付けてstackを再作成します。固定LANアドレスがある場合は、`.env`の`SMB_HOST_BIND`をそのアドレスへ限定してください。
+
+```dotenv
+# 推奨例。実際のLinuxサーバーLANアドレスに置き換える
+SMB_HOST_BIND=192.168.2.10
+SMB_HOST_PORT=445
+```
+
+全インターフェースで受ける必要がある場合だけ、次を使用します。
+
+```dotenv
+SMB_HOST_BIND=0.0.0.0
+SMB_HOST_PORT=445
+```
+
+起動・確認:
+
+```bash
+docker compose \
+  -f compose.yaml \
+  -f compose.smb-host.yaml \
+  --profile smb \
+  up -d --build
+
+docker compose \
+  -f compose.yaml \
+  -f compose.smb-host.yaml \
+  --profile smb \
+  ps
+
+sudo ss -ltnp | grep ':445 '
+```
+
+LANクライアントの接続先は`\\<LinuxサーバーのLANアドレス>\iCloud`です。このoverrideを外して通常の`docker compose up`でTailscale containerを再作成すると、ホスト側port公開も外れます。
+
+この共有は無認証かつ読み書き・削除可能です。ルーターでTCP 445をport-forwardせず、Linux firewallでも信頼済みLAN subnet以外を拒否してください。Dockerが管理するport公開はディストリビューションによって通常のfirewall規則より先に処理される場合があるため、実機から許可/拒否の両方を試験してください。
 
 ### 旧SFTP互換レイヤー
 
