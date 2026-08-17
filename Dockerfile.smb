@@ -6,7 +6,8 @@ RUN apk add --no-cache \
       samba-server \
       tini \
       util-linux && \
-    adduser -S -D -H -u 10002 -s /sbin/nologin smbguest && \
+    addgroup -S -g 10002 smbguest && \
+    adduser -S -D -H -u 10002 -G smbguest -s /sbin/nologin smbguest && \
     mkdir -p /cache /runtime /srv/icloud /var/cache/samba /var/lib/samba /run/samba && \
     chown -R smbguest:smbguest /cache /srv/icloud && \
     printf '%s\n' user_allow_other > /etc/fuse.conf
