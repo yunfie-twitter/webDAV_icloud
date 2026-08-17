@@ -36,6 +36,8 @@ cat > "$samba_config" <<'EOF'
     map to guest = Bad User
     guest account = smbguest
     restrict anonymous = 0
+    idmap config * : backend = tdb
+    idmap config * : range = 1000000-1999999
 
     # Loopback is used by Tailscale Serve. eth0 accepts the optional Docker
     # host-port mapping from compose.smb-host.yaml.
