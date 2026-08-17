@@ -33,7 +33,10 @@ cat > "$samba_config" <<'EOF'
     server string = iCloud Encrypted SMB Gateway
     server role = standalone server
     security = user
-    map to guest = Bad User
+    # This server exposes guest-only shares. Windows often submits the signed-
+    # in account even for an anonymous mapping, so both unknown users and bad
+    # credentials must fall back to the dedicated unprivileged guest account.
+    map to guest = Bad Password
     guest account = smbguest
     restrict anonymous = 0
     idmap config * : backend = tdb
