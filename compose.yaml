@@ -124,6 +124,7 @@ services:
       - /cache:rw,nosuid,nodev,noexec,size=${SMB_CACHE_SIZE:-2G},mode=0700
       - /var/cache/samba:rw,nosuid,nodev,noexec,size=16m,mode=0755
       - /var/lib/samba:rw,nosuid,nodev,noexec,size=32m,mode=0755
+      - /var/log/samba:rw,nosuid,nodev,noexec,size=16m,mode=0755
       - /run/samba:rw,nosuid,nodev,noexec,size=16m,mode=0755
     read_only: true
     stop_grace_period: 30s

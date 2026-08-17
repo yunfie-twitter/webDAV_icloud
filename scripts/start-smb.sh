@@ -9,6 +9,11 @@ samba_config=/runtime/smb.conf
 mount_path=/srv/icloud
 
 umask 077
+# These paths live on Compose tmpfs mounts because the container root is
+# read-only. Samba creates its message socket and crash directory below them.
+mkdir -p /var/lib/samba/private /var/log/samba/cores
+chmod 0700 /var/lib/samba/private /var/log/samba/cores
+
 obscured_webdav_password=$(
   printf '%s\n' "$ICLOUD_WEBDAV_PASSWORD" | rclone obscure -
 )
